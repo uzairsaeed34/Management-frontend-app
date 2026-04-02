@@ -25,7 +25,24 @@ const barColor = (occupancy) => {
   if (occupancy >= 50)  return "#ffd166";
   return "#34d399";
 };
-
+// ─────────────────────────────────────────────────────────────────────────────
+//  Render custom axis labels for long PE names
+// ─────────────────────────────────────────────────────────────────────────────
+const renderCustomXAxisTick = ({ x, y, payload }) => (
+  <g transform={`translate(${x},${y})`}>
+    <text
+      x={0}
+      y={0}
+      dy={16}
+      textAnchor="end"
+      fill="#8b90a7"
+      transform="rotate(-40)"
+      fontSize={10}
+    >
+      {payload.value}
+    </text>
+  </g>
+);
 // ─────────────────────────────────────────────────────────────────────────────
 //  parsePercent
 //  Safely converts any occupancy / bandwidth value to a numeric percentage.
@@ -138,16 +155,8 @@ const WorkloadDashboard = () => {
       const occ = parsePercent(r.occupancy);
       byPE[key].totalOccupancy += occ;
 
-      // ── Bandwidth: keep the MAX value seen for this PE ─────────────────
-      // Skip 0 and null — a 0-bandwidth cell almost always means "not filled"
-      if (r.bandwidth !== null && r.bandwidth !== undefined && r.bandwidth !== "") {
-        const bw = parsePercent(r.bandwidth);
-        if (bw > 0) {
-          if (byPE[key].bandwidth === null || bw > byPE[key].bandwidth) {
-            byPE[key].bandwidth = bw;
-          }
-        }
-      }
+      // ── Bandwidth is fixed at 100% for all PEs (ignore any per-row bandwidth values) ─
+      byPE[key].bandwidth = 100;
 
       byPE[key].entries.push(r);
     });
@@ -222,9 +231,9 @@ const WorkloadDashboard = () => {
 
         {/* ── Summary stat cards ── */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <StatCard title="Total PEs"          value={data?.summary?.totalPEs ?? 0}                    icon={null} color="#3d5aff" />
+          <StatCard title="Total Employees"          value={data?.summary?.totalPEs ?? 0}                    icon={null} color="#3d5aff" />
           <StatCard title="Average Occupancy"  value={`${data?.summary?.averageOccupancy ?? 0}%`}      icon={null} color="#06d6a0" />
-          <StatCard title="Available Capacity" value={`${data?.summary?.availableCapacity ?? 0}%`}     icon={null} color="#34d399" />
+          {/* <StatCard title="Available Capacity" value={`${data?.summary?.availableCapacity ?? 0}%`}     icon={null} color="#34d399" /> */}
         </div>
 
         {/* ── Filters ── */}
@@ -256,7 +265,9 @@ const WorkloadDashboard = () => {
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
                   <XAxis
                     dataKey="peName"
-                    tick={{ fill: "#8b90a7", fontSize: 11 }}
+                    tick={renderCustomXAxisTick}
+                    interval={0}
+                    height={80}
                     axisLine={false}
                     tickLine={false}
                   />
@@ -291,7 +302,7 @@ const WorkloadDashboard = () => {
 
         {/* ── PE Workload Table ── */}
         <div className="card p-4 overflow-x-auto">
-          <h3 className="section-title mb-4">PE Workload Table</h3>
+          <h3 className="section-title mb-4">Employee Workload Table</h3>
           {grouped.length === 0 ? (
             <p className="text-white/40">No records found.</p>
           ) : (

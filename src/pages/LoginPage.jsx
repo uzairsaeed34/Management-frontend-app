@@ -70,7 +70,7 @@ export default function LoginPage() {
             </motion.button>
           </form>
         </div>
-        {/*<p className="text-center text-xs text-white/20 mt-6">Default: admin@pe.com / admin123</p>*/}
+        <p className="text-center text-xs text-white/20 mt-6">Default: admin@pe.com / admin123</p>
       </motion.div>
     </div>
   );

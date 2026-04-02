@@ -5,24 +5,24 @@ import TopBar from "../components/layout/TopBar";
 import { StatCard, LoadingScreen } from "../components/shared/UIComponents";
 import api from "../utils/api";
 
-const emptyForm = {
+const AdminWorkloadPage = () => {
+  const emptyForm = {
   id: null,
   peName: "",
   project: "",
   task: "",
   occupancy: "",
-  bandwidth: "",
+  bandwidth: 100,
   reviewer: "",
 };
 
-const AdminWorkloadPage = () => {
-  const PE_NAMES = [
-    "Abdullah","Muzammil Hussain","Yumna","Ashar","Ashish","Lahari","Manideepa","Hassan",
-    "Hasnain Raza","Akhila","Akhshay","Shaik Neloufar","Asil","Jayanthi","Hassan Ali",
-    "Abdul Basit","Sri Sai Natha Chittajallu","Pooja Sri Kankanampati","Madhu Sree Ummidi",
-  ];
+const PE_NAMES = [
+  "Abdullah","Muzammil Hussain","Yumna","Ashar","Ashish","Lahari","Manideepa","Hassan",
+  "Hasnain Raza","Akhila","Akhshay","Shaik Neloufar","Asil","Jayanthi","Hassan Ali",
+  "Abdul Basit","Sri Sai Natha Chittajallu","Pooja Sri Kankanampati","Madhu Sree Ummidi",
+];
 
-  const PROJECTS = [
+const PROJECTS = [
     "Nowports AP","Bempro AR","HR AP Retail","HR Marchandize","Sienna","NZF","Time Square","Bempro AP",
     "LA","ATS","Nowports AR","NZF","Harry Rosen","Martek","Telus","Navistar","CIBC","Bempro",
     "Rab Design","Mehreen's help","IDRF","DBG","RAB Inventory","Nowports","RAB Order Processing",
@@ -114,11 +114,11 @@ const AdminWorkloadPage = () => {
         project: form.project.trim(),
         task: form.task.trim(),
         occupancy: Number(form.occupancy),
-        bandwidth: Number(form.bandwidth),
+        bandwidth: 100,
         reviewer: form.reviewer.trim(),
       };
 
-      if (!payload.peName || !payload.project || !payload.task || isNaN(payload.occupancy) || isNaN(payload.bandwidth) || !payload.reviewer) {
+      if (!payload.peName || !payload.project || !payload.task || isNaN(payload.occupancy) || !payload.reviewer) {
         throw new Error("Please fill in all fields with valid values.");
       }
 
@@ -145,7 +145,7 @@ const AdminWorkloadPage = () => {
       project: item.project,
       task: item.task,
       occupancy: item.occupancy,
-      bandwidth: item.bandwidth,
+      bandwidth: 100,
       reviewer: item.reviewer,
     });
   };
@@ -209,7 +209,7 @@ const AdminWorkloadPage = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <input type="number" value={form.occupancy} onChange={(e) => setForm({ ...form, occupancy: e.target.value })} placeholder="Occupancy %" className="input input-light" />
-            <input type="number" value={form.bandwidth} onChange={(e) => setForm({ ...form, bandwidth: e.target.value })} placeholder="Bandwidth %" className="input input-light" />
+            <div className="input input-light flex items-center justify-center text-sm font-medium text-slate-600">Bandwidth: 100%</div>
             <select value={form.reviewer} onChange={(e) => setForm({ ...form, reviewer: e.target.value })} className="input input-light">
               <option value="">Choose Reviewer</option>
               {REVIEWERS.map((name) => (<option key={name} value={name}>{name}</option>))}
@@ -248,7 +248,7 @@ const AdminWorkloadPage = () => {
                   <td className="px-3 py-2">{item.project}</td>
                   <td className="px-3 py-2">{item.task}</td>
                   <td className="px-3 py-2">{item.occupancy}%</td>
-                  <td className="px-3 py-2">{item.bandwidth}%</td>
+                  <td className="px-3 py-2">100%</td>
                   <td className="px-3 py-2">{item.reviewer}</td>
                   <td className="px-3 py-2 flex gap-2">
                     <button type="button" onClick={() => handleEdit(item)} className="btn-secondary">Edit</button>

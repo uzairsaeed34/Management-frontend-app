@@ -1,5 +1,6 @@
 import React from "react";
 import Sidebar from "./Sidebar";
+import ChatBot from "../shared/ChatBot";
 
 export default function AppLayout({ children }) {
   return (
@@ -8,6 +9,7 @@ export default function AppLayout({ children }) {
       <main className="flex-1 flex flex-col overflow-hidden">
         {children}
       </main>
+      <ChatBot />
     </div>
   );
 }
