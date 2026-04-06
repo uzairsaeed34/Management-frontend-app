@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { MessageCircle, X, Send } from "lucide-react";
 import api from "@/utils/api";
 
@@ -9,21 +9,43 @@ const ChatBot = () => {
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [isOpen, messages, loading]);
 
   const sendMessage = async () => {
-    if (!input.trim()) return;
+    const trimmedInput = input.trim();
+    if (!trimmedInput) return;
 
-    const userMessage = { text: input, sender: "user" };
+    const userMessage = { text: trimmedInput, sender: "user" };
     setMessages(prev => [...prev, userMessage]);
     setInput("");
     setLoading(true);
 
     try {
-      const response = await api.post("/chat/send", { message: input });
-      const botMessage = { text: response.data.response, sender: "bot" };
-      setMessages(prev => [...prev, botMessage]);
+      const response = await api.post(
+        "/chat/send",
+        { message: trimmedInput },
+        { skipAuth: true }
+      );
+      if (response.data.success && response.data.response) {
+        const botMessage = { text: response.data.response, sender: "bot" };
+        setMessages(prev => [...prev, botMessage]);
+      } else {
+        throw new Error(response.data.message || "No valid response from AI");
+      }
     } catch (error) {
-      const serverMessage = error.response?.data?.message || error.message || "Sorry, I couldn't process your request. Please try again.";
+      console.error("Chat Error:", error);
+      const rawMessage =
+        error.response?.data?.message ||
+        error.message ||
+        "Sorry, I couldn't process your request. Please try again.";
+      const serverMessage = rawMessage === "User not found."
+        ? "The chatbot reached the wrong backend or an outdated session. Restart the backend on port 5000, then sign in again."
+        : rawMessage;
       const errorMessage = { text: serverMessage, sender: "bot" };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
@@ -31,7 +53,7 @@ const ChatBot = () => {
     }
   };
 
-  const handleKeyPress = (e) => {
+  const handleKeyDown = (e) => {
     if (e.key === "Enter") {
       sendMessage();
     }
@@ -87,6 +109,7 @@ const ChatBot = () => {
                 </div>
               </div>
             )}
+            <div ref={messagesEndRef} />
           </div>
 
           {/* Input */}
@@ -96,7 +119,7 @@ const ChatBot = () => {
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyPress={handleKeyPress}
+                onKeyDown={handleKeyDown}
                 placeholder="Ask me anything..."
                 className="flex-1 bg-white/10 border border-white/20 rounded px-3 py-2 text-white placeholder-white/50 focus:outline-none focus:border-brand-500"
                 disabled={loading}
