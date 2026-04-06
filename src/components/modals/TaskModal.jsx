@@ -22,7 +22,7 @@ const empty = {
   startDate: "", dueDate: "", estimatedTime: "",
 };
 
-export default function TaskModal({ isOpen, onClose, task, onSaved }) {
+export default function TaskModal({ isOpen, onClose, task, onSaved, fixedProjectId = "", hideProjectField = false }) {
   const [form, setForm] = useState(empty);
   const [projects, setProjects] = useState([]);
   const [pes, setPes] = useState([]);
@@ -31,15 +31,26 @@ export default function TaskModal({ isOpen, onClose, task, onSaved }) {
 
   useEffect(() => {
     if (!isOpen) return;
-    Promise.all([api.get("/projects"), api.get("/users/pes")]).then(([p, u]) => {
-      setProjects(p.data.projects.map((x) => ({ value: x._id, label: x.name })));
-      setPes(u.data.pes.map((x) => ({ value: x._id, label: x.name })));
+    const requests = [api.get("/users/pes")];
+    if (!hideProjectField) {
+      requests.unshift(api.get("/projects"));
+    }
+
+    Promise.all(requests).then((responses) => {
+      const projectResponse = hideProjectField ? null : responses[0];
+      const userResponse = hideProjectField ? responses[0] : responses[1];
+
+      if (projectResponse) {
+        setProjects(projectResponse.data.projects.map((x) => ({ value: x._id, label: x.name })));
+      }
+
+      setPes(userResponse.data.pes.map((x) => ({ value: x._id, label: x.name })));
     });
     if (task) {
       setForm({
         title: task.title || "",
         description: task.description || "",
-        project: task.project?._id || task.project || "",
+        project: fixedProjectId || task.project?._id || task.project || "",
         assignedTo: task.assignedTo?._id || task.assignedTo || "",
         taskType: task.taskType || "new_pe_work",
         priority: task.priority || "medium",
@@ -49,9 +60,9 @@ export default function TaskModal({ isOpen, onClose, task, onSaved }) {
         estimatedTime: task.estimatedTime || "",
       });
     } else {
-      setForm(empty);
+      setForm({ ...empty, project: fixedProjectId || "" });
     }
-  }, [isOpen, task]);
+  }, [fixedProjectId, hideProjectField, isOpen, task]);
 
   const set = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -60,6 +71,7 @@ export default function TaskModal({ isOpen, onClose, task, onSaved }) {
     setSaving(true);
     try {
       const payload = { ...form };
+      if (!payload.project) delete payload.project;
       if (!payload.assignedTo) delete payload.assignedTo;
       if (!payload.startDate) delete payload.startDate;
       if (!payload.dueDate) delete payload.dueDate;
@@ -67,13 +79,14 @@ export default function TaskModal({ isOpen, onClose, task, onSaved }) {
       else payload.estimatedTime = Number(payload.estimatedTime);
 
       if (task) {
-        await api.put(`/tasks/${task._id}`, payload);
+        const { data } = await api.put(`/tasks/${task._id}`, payload);
         toast("Task updated", "success");
+        onSaved?.(data.task, "updated");
       } else {
-        await api.post("/tasks", payload);
+        const { data } = await api.post("/tasks", payload);
         toast("Task created", "success");
+        onSaved?.(data.task, "created");
       }
-      onSaved?.();
       onClose();
     } catch (err) {
       toast(err.response?.data?.message || "Failed to save task", "error");
@@ -89,9 +102,11 @@ export default function TaskModal({ isOpen, onClose, task, onSaved }) {
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
             <Input label="Task Title" required placeholder="What needs to be done?" value={form.title} onChange={(e) => set("title")(e.target.value)} />
 
-            <div className="grid grid-cols-2 gap-4">
-              <Select label="Project" required value={form.project} onChange={set("project")}
-                options={projects} placeholder="Select project" />
+            <div className={`grid gap-4 ${hideProjectField ? "grid-cols-1" : "grid-cols-2"}`}>
+              {!hideProjectField && (
+                <Select label="Project" required value={form.project} onChange={set("project")}
+                  options={projects} placeholder="Select project" />
+              )}
               <Select label="Assign To" value={form.assignedTo} onChange={set("assignedTo")}
                 options={pes} placeholder="Unassigned" />
             </div>

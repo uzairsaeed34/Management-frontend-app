@@ -1,166 +1,253 @@
-import React, { useEffect, useState, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Search, Play, Square, Trash2, Edit2, Clock, Calendar, ChevronDown, CheckSquare } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { ArrowRight, CheckSquare, FolderOpen, ListTodo, Plus, Users } from "lucide-react";
 import AppLayout from "../components/layout/AppLayout";
 import TopBar from "../components/layout/TopBar";
-import TaskModal from "../components/modals/TaskModal";
-import { PriorityBadge, StatusBadge, TaskTypeBadge, Avatar, EmptyState, LoadingScreen } from "../components/shared/UIComponents";
+import { Avatar, EmptyState, LoadingScreen, ProgressBar, StatusBadge } from "../components/shared/UIComponents";
 import { useAuth } from "../context/AuthContext";
-import { useToast } from "../context/ToastContext";
 import api from "../utils/api";
-import { formatDate, minutesToHours, isOverdue, truncate } from "../utils/helpers";
 
 export default function TasksPage() {
-  const [tasks, setTasks] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editTask, setEditTask] = useState(null);
-  const [search, setSearch] = useState("");
-  const [filters, setFilters] = useState({ priority:"", status:"", project:"" });
-  const [projects, setProjects] = useState([]);
-  const [liveTimers, setLiveTimers] = useState({});
+  const navigate = useNavigate();
   const { isAdmin } = useAuth();
-  const toast = useToast();
+  const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedProjectId, setSelectedProjectId] = useState("");
 
-  const fetchTasks = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (search) params.set("search", search);
-      if (filters.priority) params.set("priority", filters.priority);
-      if (filters.status) params.set("status", filters.status);
-      if (filters.project) params.set("project", filters.project);
-      const { data } = await api.get(`/tasks?${params}`);
-      setTasks(data.tasks);
-    } finally { setLoading(false); }
-  }, [search, filters]);
-
-  useEffect(() => { fetchTasks(); }, [fetchTasks]);
-  useEffect(() => { api.get("/projects").then(({ data }) => setProjects(data.projects)); }, []);
-
-  // Live timer tick every 10s
   useEffect(() => {
-    const tick = () => {
-      setLiveTimers((prev) => {
-        const next = { ...prev };
-        tasks.forEach((t) => {
-          if (t.timerActive && t.timerStartedAt) {
-            next[t._id] = Math.floor((Date.now() - new Date(t.timerStartedAt)) / 60000);
-          }
-        });
-        return next;
-      });
+    let isMounted = true;
+
+    const loadProjects = async () => {
+      setLoading(true);
+      try {
+        const { data } = await api.get("/projects");
+        if (!isMounted) return;
+        setProjects(data.projects || []);
+        if (data.projects?.length) {
+          setSelectedProjectId((current) => current || data.projects[0]._id);
+        }
+      } finally {
+        if (isMounted) setLoading(false);
+      }
     };
-    tick();
-    const id = setInterval(tick, 10000);
-    return () => clearInterval(id);
-  }, [tasks]);
 
-  const handleTimer = async (task) => {
-    try {
-      if (task.timerActive) { await api.post(`/tasks/${task._id}/timer/stop`); toast("Timer stopped","info"); }
-      else { await api.post(`/tasks/${task._id}/timer/start`); toast("Timer started ▶","success"); }
-      fetchTasks();
-    } catch(err) { toast(err.response?.data?.message||"Timer error","error"); }
-  };
+    loadProjects();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
-  const handleDelete = async (id) => {
-    if (!confirm("Delete this task?")) return;
-    try { await api.delete(`/tasks/${id}`); toast("Task deleted","success"); fetchTasks(); }
-    catch { toast("Failed to delete","error"); }
-  };
+  const selectedProject = useMemo(
+    () => projects.find((project) => project._id === selectedProjectId) || projects[0] || null,
+    [projects, selectedProjectId]
+  );
 
-  const overdueTasks = tasks.filter((t) => isOverdue(t.dueDate, t.status));
+  if (loading) {
+    return (
+      <AppLayout>
+        <LoadingScreen />
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
-      <TopBar title="Tasks" onNewClick={isAdmin?()=>{setEditTask(null);setModalOpen(true);}:null} newLabel="New Task" />
+      <TopBar title="Tasks" />
       <div className="flex-1 overflow-y-auto">
-        {/* Filter bar */}
-        <div className="sticky top-0 z-10 bg-surface/90 glass border-b border-white/[0.06] px-6 py-3 flex items-center gap-3 flex-wrap">
-          <div className="relative flex-1 min-w-[180px] max-w-xs">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30"/>
-            <input placeholder="Search tasks..." className="input pl-8 py-2 h-9 text-sm" value={search} onChange={(e)=>setSearch(e.target.value)}/>
-          </div>
-          {[
-            { key:"priority", opts:[{value:"",label:"All Priorities"},{value:"high",label:"🔴 High"},{value:"medium",label:"🟡 Medium"},{value:"low",label:"🟢 Low"}] },
-            { key:"status", opts:[{value:"",label:"All Statuses"},{value:"pending",label:"Pending"},{value:"in_progress",label:"In Progress"},{value:"completed",label:"Completed"}] },
-          ].map(({key,opts})=>(
-            <div key={key} className="relative">
-              <select className="input pr-8 py-2 h-9 text-sm appearance-none cursor-pointer" value={filters[key]} onChange={(e)=>setFilters({...filters,[key]:e.target.value})}>
-                {opts.map((o)=><option key={o.value} value={o.value} className="bg-surface-50">{o.label}</option>)}
-              </select>
-              <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none"/>
-            </div>
-          ))}
-          <div className="relative">
-            <select className="input pr-8 py-2 h-9 text-sm appearance-none cursor-pointer" value={filters.project} onChange={(e)=>setFilters({...filters,project:e.target.value})}>
-              <option value="">All Projects</option>
-              {projects.map((p)=><option key={p._id} value={p._id} className="bg-surface-50">{p.name}</option>)}
-            </select>
-            <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none"/>
-          </div>
-          <span className="text-xs text-white/30 ml-auto">{tasks.length} tasks</span>
-          {overdueTasks.length>0 && <span className="text-xs text-red-400 font-medium">⚠ {overdueTasks.length} overdue</span>}
-        </div>
+        <div className="p-6 space-y-6">
+          <section className="rounded-3xl border border-white/[0.08] bg-[linear-gradient(180deg,rgba(61,90,255,0.16),rgba(255,255,255,0.03))] p-6">
+            <div className="flex items-start justify-between gap-6 flex-wrap">
+              <div>
+                <div className="inline-flex items-center gap-2 rounded-full border border-brand-500/30 bg-brand-500/10 px-3 py-1 text-[11px] uppercase tracking-[0.16em] text-brand-300">
+                  <ListTodo size={12} />
+                  Project-Based Tasks
+                </div>
+                <h1 className="mt-3 text-3xl font-display font-bold text-white">
+                  Manage tasks through project workspaces
+                </h1>
+                <p className="mt-2 max-w-2xl text-sm text-white/40">
+                  Tasks now belong to projects, not a single global list. Open a project workspace to create,
+                  view, and manage the tasks for that project only.
+                </p>
+              </div>
 
-        <div className="p-6">
-          {loading ? <LoadingScreen /> : tasks.length===0 ? (
-            <EmptyState icon={CheckSquare} title="No tasks found" description="Create your first task to get started"
-              action={isAdmin&&<button className="btn-primary" onClick={()=>{setEditTask(null);setModalOpen(true);}}><Plus size={16}/>New Task</button>}/>
+              {selectedProject && (
+                <button
+                  onClick={() => navigate(`/projects/${selectedProject._id}`)}
+                  className="btn-primary"
+                >
+                  <FolderOpen size={15} />
+                  Open Selected Workspace
+                </button>
+              )}
+            </div>
+          </section>
+
+          {projects.length === 0 ? (
+            <EmptyState
+              icon={CheckSquare}
+              title="No project workspaces yet"
+              description="Create a project first, then start adding tasks inside that project."
+            />
           ) : (
-            <motion.div initial={{opacity:0}} animate={{opacity:1}} className="space-y-2">
-              {tasks.map((task,i)=>{
-                const overdue = isOverdue(task.dueDate, task.status);
-                const liveMins = task.timerActive ? (liveTimers[task._id]||0) : 0;
-                return (
-                  <motion.div key={task._id} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:i*0.025}}
-                    className={`card-hover p-4 flex items-center gap-4 ${overdue?"border-red-500/20":""}`}>
-                    <div className="w-1 h-10 rounded-full flex-shrink-0" style={{background:task.priority==="high"?"#ff4d6d":task.priority==="medium"?"#ffd166":"#06d6a0"}}/>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <span className={`text-sm font-medium ${task.status==="completed"?"line-through text-white/30":"text-white"}`}>{task.title}</span>
-                        {overdue && <span className="text-xs text-red-400 font-medium">Overdue</span>}
-                        {task.timerActive && (
-                          <span className="flex items-center gap-1 text-xs text-green-400 font-medium animate-pulse2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-green-400"/>
-                            {minutesToHours((task.actualTime||0)+liveMins)}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <span className="text-xs text-white/30">{task.project?.name}</span>
-                        <TaskTypeBadge type={task.taskType}/>
-                        <PriorityBadge priority={task.priority}/>
-                        <StatusBadge status={task.status}/>
-                        {task.dueDate&&<span className={`flex items-center gap-1 text-xs ${overdue?"text-red-400":"text-white/30"}`}><Calendar size={11}/>{formatDate(task.dueDate)}</span>}
-                        {task.estimatedTime>0&&<span className="flex items-center gap-1 text-xs text-white/30"><Clock size={11}/>{minutesToHours(task.estimatedTime)} est.</span>}
-                        {task.actualTime>0&&<span className="flex items-center gap-1 text-xs text-brand-400"><Clock size={11}/>{minutesToHours(task.actualTime)}</span>}
+            <div className="grid grid-cols-1 xl:grid-cols-[320px_minmax(0,1fr)] gap-6">
+              <section className="rounded-3xl border border-white/[0.08] bg-white/[0.03] overflow-hidden">
+                <div className="px-5 py-4 border-b border-white/[0.06]">
+                  <h2 className="text-lg font-display font-bold text-white">Projects</h2>
+                  <p className="text-sm text-white/35 mt-1">Select a project to work on its tasks.</p>
+                </div>
+                <div className="p-3 space-y-2 max-h-[70vh] overflow-y-auto">
+                  {projects.map((project) => {
+                    const isActive = project._id === selectedProject?._id;
+                    return (
+                      <button
+                        key={project._id}
+                        onClick={() => setSelectedProjectId(project._id)}
+                        className={`w-full text-left rounded-2xl border p-4 transition-all ${
+                          isActive
+                            ? "bg-white/[0.09] border-white/[0.12]"
+                            : "bg-white/[0.02] border-white/[0.05] hover:bg-white/[0.05]"
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div
+                            className="w-10 h-10 rounded-2xl flex items-center justify-center border flex-shrink-0"
+                            style={{ background: `${project.color}18`, borderColor: `${project.color}33` }}
+                          >
+                            <FolderOpen size={16} style={{ color: project.color }} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-sm font-medium text-white truncate">{project.name}</p>
+                              <StatusBadge status={project.status} />
+                            </div>
+                            <p className="text-xs text-white/30 truncate mt-1">{project.clientName}</p>
+                            <div className="mt-3 flex items-center justify-between text-xs text-white/35">
+                              <span>{project.taskSummary?.total || 0} tasks</span>
+                              <span>{project.assignedPEs?.length || 0} people</span>
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+
+              <section className="rounded-3xl border border-white/[0.08] bg-white/[0.03] overflow-hidden">
+                {selectedProject ? (
+                  <>
+                    <div className="px-6 py-5 border-b border-white/[0.06]">
+                      <div className="flex items-start justify-between gap-4 flex-wrap">
+                        <div className="flex items-start gap-4">
+                          <div
+                            className="w-12 h-12 rounded-2xl flex items-center justify-center border"
+                            style={{ background: `${selectedProject.color}18`, borderColor: `${selectedProject.color}33` }}
+                          >
+                            <FolderOpen size={18} style={{ color: selectedProject.color }} />
+                          </div>
+                          <div>
+                            <h2 className="text-2xl font-display font-bold text-white">{selectedProject.name}</h2>
+                            <p className="text-sm text-white/35 mt-1">{selectedProject.clientName}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <Link to={`/projects/${selectedProject._id}`} className="btn-secondary">
+                            Open Workspace
+                          </Link>
+                          {isAdmin && (
+                            <Link to={`/projects/${selectedProject._id}`} className="btn-primary">
+                              <Plus size={15} />
+                              Create Task
+                            </Link>
+                          )}
+                        </div>
                       </div>
                     </div>
-                    {task.assignedTo && (
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <Avatar name={task.assignedTo.name} size="sm"/>
-                        <span className="text-xs text-white/40 hidden sm:block">{task.assignedTo.name}</span>
+
+                    <div className="p-6 space-y-6">
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
+                          <p className="text-xs text-white/35">Total Tasks</p>
+                          <p className="mt-2 text-2xl font-display font-bold text-white">{selectedProject.taskSummary?.total || 0}</p>
+                        </div>
+                        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
+                          <p className="text-xs text-white/35">To Do</p>
+                          <p className="mt-2 text-2xl font-display font-bold text-white">{selectedProject.taskSummary?.pending || 0}</p>
+                        </div>
+                        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
+                          <p className="text-xs text-white/35">In Progress</p>
+                          <p className="mt-2 text-2xl font-display font-bold text-white">{selectedProject.taskSummary?.in_progress || 0}</p>
+                        </div>
+                        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
+                          <p className="text-xs text-white/35">Done</p>
+                          <p className="mt-2 text-2xl font-display font-bold text-white">{selectedProject.taskSummary?.completed || 0}</p>
+                        </div>
                       </div>
-                    )}
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                      {task.status!=="completed" && (
-                        <button onClick={()=>handleTimer(task)} className={`p-2 rounded-lg transition-colors ${task.timerActive?"bg-red-500/15 text-red-400 hover:bg-red-500/25":"hover:bg-white/[0.06] text-white/40 hover:text-green-400"}`} title={task.timerActive?"Stop":"Start"}>
-                          {task.timerActive?<Square size={14}/>:<Play size={14}/>}
-                        </button>
-                      )}
-                      <button onClick={()=>{setEditTask(task);setModalOpen(true);}} className="p-2 rounded-lg hover:bg-white/[0.06] text-white/30 hover:text-white transition-colors"><Edit2 size={14}/></button>
-                      {isAdmin&&<button onClick={()=>handleDelete(task._id)} className="p-2 rounded-lg hover:bg-red-500/10 text-white/20 hover:text-red-400 transition-colors"><Trash2 size={14}/></button>}
+
+                      <div className="rounded-3xl border border-white/[0.06] bg-white/[0.02] p-5">
+                        <div className="flex items-center justify-between text-xs mb-2">
+                          <span className="text-white/35">Project completion</span>
+                          <span className="text-white font-medium">{selectedProject.completionPercentage}%</span>
+                        </div>
+                        <ProgressBar value={selectedProject.completionPercentage} color={selectedProject.color} />
+                      </div>
+
+                      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-6">
+                        <div className="rounded-3xl border border-white/[0.06] bg-white/[0.02] p-5">
+                          <h3 className="text-lg font-display font-bold text-white">How it works now</h3>
+                          <div className="mt-4 space-y-3 text-sm text-white/45">
+                            <p>1. Choose a project from the list on the left.</p>
+                            <p>2. Open that project workspace.</p>
+                            <p>3. Create tasks inside the project page.</p>
+                            <p>4. New tasks appear under that project only.</p>
+                          </div>
+                          <Link
+                            to={`/projects/${selectedProject._id}`}
+                            className="mt-5 inline-flex items-center gap-2 rounded-2xl border border-brand-500/30 bg-brand-500/12 px-4 py-3 text-sm font-medium text-brand-300 hover:bg-brand-500/20 transition-colors"
+                          >
+                            Go To Project Task Workspace
+                            <ArrowRight size={14} />
+                          </Link>
+                        </div>
+
+                        <div className="rounded-3xl border border-white/[0.06] bg-white/[0.02] p-5">
+                          <h3 className="text-lg font-display font-bold text-white">Assigned Team</h3>
+                          <div className="mt-4 space-y-3">
+                            {selectedProject.assignedPEs?.length ? selectedProject.assignedPEs.map((pe) => (
+                              <div key={pe._id} className="flex items-center gap-3">
+                                <Avatar name={pe.name} />
+                                <div className="min-w-0">
+                                  <p className="text-sm font-medium text-white truncate">{pe.name}</p>
+                                  <p className="text-xs text-white/30 truncate">{pe.email}</p>
+                                </div>
+                              </div>
+                            )) : (
+                              <div className="inline-flex items-center gap-2 text-sm text-white/35">
+                                <Users size={14} />
+                                No team assigned yet
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  </motion.div>
-                );
-              })}
-            </motion.div>
+                  </>
+                ) : (
+                  <div className="p-10">
+                    <EmptyState
+                      icon={FolderOpen}
+                      title="Choose a project"
+                      description="Select a project from the left to open its task workspace."
+                    />
+                  </div>
+                )}
+              </section>
+            </div>
           )}
         </div>
       </div>
-      <TaskModal isOpen={modalOpen} onClose={()=>setModalOpen(false)} task={editTask} onSaved={fetchTasks}/>
     </AppLayout>
   );
 }

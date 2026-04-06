@@ -176,7 +176,7 @@ export default function ProjectsPage() {
                       {p.assignedPEs?.slice(0,4).map((pe)=>(<Avatar key={pe._id} name={pe.name} size="sm" className="border-2 border-surface-50" />))}
                     </div>
                     <div className="flex gap-1.5">
-                      <Link to={`/projects/${p._id}`} className="p-1.5 rounded-lg hover:bg-brand-500/15 text-white/30 hover:text-brand-400 transition-colors" title="View details"><ExternalLink size={13}/></Link>
+                      <Link to={`/projects/${p._id}`} className="p-1.5 rounded-lg hover:bg-brand-500/15 text-white/30 hover:text-brand-400 transition-colors" title="Open workspace"><ExternalLink size={13}/></Link>
                       {isAdmin&&(
                         <>
                           <button onClick={(e)=>{e.preventDefault();setEditProject(p);setModalOpen(true);}} className="p-1.5 rounded-lg hover:bg-white/[0.06] text-white/30 hover:text-white transition-colors"><Edit2 size={13}/></button>
@@ -198,7 +198,10 @@ export default function ProjectsPage() {
                     <div className="flex items-center gap-4"><span className="text-xs text-white/40">{p.clientName}</span><ProgressBar value={p.completionPercentage} color={p.color} className="w-32"/><span className="text-xs text-white/40">{p.completionPercentage}%</span></div>
                   </div>
                   <div className="text-xs text-white/30">{p.taskSummary?.total||0} tasks</div>
-                  {isAdmin&&(<div className="flex gap-1"><button onClick={()=>{setEditProject(p);setModalOpen(true);}} className="p-1.5 rounded-lg hover:bg-white/[0.06] text-white/30 hover:text-white transition-colors"><Edit2 size={13}/></button><button onClick={()=>handleDelete(p._id)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-white/20 hover:text-red-400 transition-colors"><Trash2 size={13}/></button></div>)}
+                  <div className="flex items-center gap-1">
+                    <Link to={`/projects/${p._id}`} className="p-1.5 rounded-lg hover:bg-brand-500/15 text-white/30 hover:text-brand-400 transition-colors"><ExternalLink size={13}/></Link>
+                    {isAdmin&&(<><button onClick={()=>{setEditProject(p);setModalOpen(true);}} className="p-1.5 rounded-lg hover:bg-white/[0.06] text-white/30 hover:text-white transition-colors"><Edit2 size={13}/></button><button onClick={()=>handleDelete(p._id)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-white/20 hover:text-red-400 transition-colors"><Trash2 size={13}/></button></>)}
+                  </div>
                 </motion.div>
               ))}
             </div>
